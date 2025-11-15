@@ -1518,38 +1518,49 @@ const Dashboard = ({ user, userInfo, userRole, permissions, logout, db }) => {
 const { archivedCases } = useFirestoreCollections(user.uid, permissions);
 
 const handleRestoreArchived = async (caseData) => {
-    await deleteDoc(doc(db, `artifacts/${appId}/public/data/archived_cases`, caseData.id));
+    try {
 
-    await addDoc(collection(db, `artifacts/${appId}/public/data/cases`), {
-    patientId: caseData.patientId,
-    patientName: caseData.patientName,
-    chiefComplaint: caseData.chiefComplaint,
-    allergies: caseData.allergies,
-    priority: caseData.priority,
-    bedNumber: caseData.bedNumber || null,
+        // 1 — حذف الحالة من الأرشيف
+        await deleteDoc(
+            doc(db, `artifacts/${appId}/public/data/archived_cases`, caseData.id)
+        );
 
-    // 🔥 أهم تعديلين
-    assignedToId: caseData.assignedToId || "",
-    assignedToName: caseData.assignedToName || "غير محدد",
+        // 2 — إضافتها كحالة جديدة تمامًا (تظهر للاستقبال + للطبيب)
+        const newCase = {
+            patientId: caseData.patientId,
+            patientName: caseData.patientName,
+            chiefComplaint: caseData.chiefComplaint,
+            allergies: caseData.allergies,
+            priority: caseData.priority,
 
-    triageBy: "Archive Restore",
+            bedNumber: null,                   // الاستقبال يختار سرير جديد
+            assignedToId: "",                  // الطبيب غير محدد
+            assignedToName: "غير محدد",        // مهم جداً
 
-    // 🔥 هذا المهم حتى يشوفها الاستقبال + الطبيب
-    status: "Active",
+            triageBy: "Archive Restore",
+            status: "Triage",                  // يظهر للاستقبال والطبيب
+            timestamp: serverTimestamp(),
 
-    processes: {
-        pharmacy: { status: "Not Requested", items: [] },
-        lab: { status: "Not Requested", items: [] },
-        nursing: { status: "Not Requested", items: [] }
-    },
+            processes: {
+                pharmacy: { status: "Not Requested", items: [] },
+                lab: { status: "Not Requested", items: [] },
+                nursing: { status: "Not Requested", items: [] }
+            }
+        };
 
-    timestamp: serverTimestamp()
-});
+        await addDoc(
+            collection(db, `artifacts/${appId}/public/data/cases`),
+            newCase
+        );
 
-alert("تمت إعادة فتح الحالة بنجاح");
-setSelectedArchived(null);
-setCurrentView("dashboard");
+        alert("تمت إعادة فتح الحالة بنجاح!");
+        setSelectedArchived(null);
+        setCurrentView("dashboard");
 
+    } catch (err) {
+        console.error(err);
+        alert("حدث خطأ أثناء إعادة فتح الحالة.");
+    }
 };
 
 
