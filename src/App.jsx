@@ -1518,25 +1518,32 @@ const Dashboard = ({ user, userInfo, userRole, permissions, logout, db }) => {
 const { archivedCases } = useFirestoreCollections(user.uid, permissions);
 
 const handleRestoreArchived = async (caseData) => {
-    try {
-        const docRef = doc(db, `artifacts/${appId}/public/data/cases/${caseData.id}`);
+    await deleteDoc(doc(db, `artifacts/${appId}/public/data/archived_cases`, caseData.id));
 
-        await setDoc(docRef, {
-            ...caseData,
-            status: "قيد الانتظار",
-            assignedToId: null,   // ← الطبيب يقدر يستلمها
-            timestamp: new Date()
-        });
+    await addDoc(collection(db, `artifacts/${appId}/public/data/cases`), {
+        patientId: caseData.patientId,
+        patientName: caseData.patientName,
+        chiefComplaint: caseData.chiefComplaint,
+        allergies: caseData.allergies,
+        priority: caseData.priority,
+        bedNumber: caseData.bedNumber || null,
+        
+        assignedToId: caseData.assignedToId || null,
+        assignedToName: caseData.assignedToName || "غير محدد",
 
-        // احذفها من الأرشيف
-        await deleteDoc(
-            doc(db, `artifacts/${appId}/public/data/archived_cases/${caseData.id}`)
-        );
+        triageBy: "Archive Restore",
+        status: "Triage",
+        processes: {
+            pharmacy: { status: "Not Requested", items: [] },
+            lab: { status: "Not Requested", items: [] },
+            nursing: { status: "Not Requested", items: [] }
+        },
+        timestamp: serverTimestamp()
+    });
 
-        alert("تم استرجاع الحالة بنجاح");
-    } catch (e) {
-        console.error("Restore error:", e);
-    }
+    alert("تمت إعادة فتح الحالة بنجاح");
+    setSelectedArchived(null);
+    setCurrentView("dashboard");
 };
 
 
@@ -1807,9 +1814,18 @@ const handleRestoreArchived = async (caseData) => {
         const isMyCase = caseItem.assignedToId === user.uid;
         
         // Show only relevant cases unless Manager
-        const isRelevant = permissions.canViewAll || isMyCase || permissions.pharmacy || permissions.nursing;
+        const isRelevant =
+    permissions.canViewAll ||
+    permissions.canTriage ||
+    isMyCase ||
+    permissions.pharmacy ||
+    permissions.nursing;
 
-        if (userRole === "استقبال") return;
+if (!assignedDoctor || assignedDoctor === "") {
+    alert("يجب تحديد طبيب مسؤول");
+    setIsSubmitting(false);
+    return;
+}
 
         return (
             <div 
