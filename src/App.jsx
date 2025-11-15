@@ -1518,20 +1518,36 @@ const Dashboard = ({ user, userInfo, userRole, permissions, logout, db }) => {
 const { archivedCases } = useFirestoreCollections(user.uid, permissions);
 
 const handleRestoreArchived = async (caseData) => {
-    // 1) احذفها من الأرشيف
-    await deleteDoc(doc(db, `artifacts/${appId}/public/data/archived_cases`, caseData.id));
+    try {
+        const docRef = doc(db, `artifacts/${appId}/public/data/cases/${caseData.id}`);
 
-    // 2) أضفها كحالة جديدة في الطوارئ
-    await addDoc(collection(db, `artifacts/${appId}/public/data/cases`), {
-        ...caseData,
-        status: 'Triage',
-        timestamp: serverTimestamp()
-    });
+        await setDoc(docRef, {
+            ...caseData,
+            status: "قيد الانتظار",
+            assignedToId: null,   // ← الطبيب يقدر يستلمها
+            timestamp: new Date()
+        });
 
-    alert("تم إعادة إرسال الحالة للطبيب بنجاح.");
-    setSelectedArchived(null);
-    setCurrentView("dashboard");
+        // احذفها من الأرشيف
+        await deleteDoc(
+            doc(db, `artifacts/${appId}/public/data/archived_cases/${caseData.id}`)
+        );
+
+        alert("تم استرجاع الحالة بنجاح");
+    } catch (e) {
+        console.error("Restore error:", e);
+    }
 };
+
+
+    {selectedArchived && (
+    <ArchiveCaseDetail
+        caseData={selectedArchived}
+        onClose={() => setSelectedArchived(null)}
+        onRestore={handleRestoreArchived}
+    />
+)}
+
 
 // ============================
 //  📁 Archive View – Full Version
@@ -1750,14 +1766,6 @@ const ArchiveView = () => {
         </div>
     );
 
-    {selectedArchived && (
-    <ArchiveCaseDetail
-        caseData={selectedArchived}
-        onClose={() => setSelectedArchived(null)}
-        onRestore={handleRestoreArchived}
-    />
-)}
-
 
     const CaseListItem = ({ caseItem }) => {
         const assignedDoctor = users.find(u => u.id === caseItem.assignedToId)?.name || 'غير محدد';
@@ -1766,7 +1774,7 @@ const ArchiveView = () => {
         // Show only relevant cases unless Manager
         const isRelevant = permissions.canViewAll || isMyCase || permissions.pharmacy || permissions.nursing;
 
-        if (!isRelevant) return null;
+        if (userRole === "استقبال") return;
 
         return (
             <div 
