@@ -1521,30 +1521,38 @@ const handleRestoreArchived = async (caseData) => {
     await deleteDoc(doc(db, `artifacts/${appId}/public/data/archived_cases`, caseData.id));
 
     await addDoc(collection(db, `artifacts/${appId}/public/data/cases`), {
-        patientId: caseData.patientId,
-        patientName: caseData.patientName,
-        chiefComplaint: caseData.chiefComplaint,
-        allergies: caseData.allergies,
-        priority: caseData.priority,
-        bedNumber: caseData.bedNumber || null,
-        
-        assignedToId: caseData.assignedToId || null,
-        assignedToName: caseData.assignedToName || "غير محدد",
+    patientId: caseData.patientId,
+    patientName: caseData.patientName,
+    chiefComplaint: caseData.chiefComplaint,
+    allergies: caseData.allergies,
+    priority: caseData.priority,
+    bedNumber: caseData.bedNumber || null,
 
-        triageBy: "Archive Restore",
-        status: "Triage",
-        processes: {
-            pharmacy: { status: "Not Requested", items: [] },
-            lab: { status: "Not Requested", items: [] },
-            nursing: { status: "Not Requested", items: [] }
-        },
-        timestamp: serverTimestamp()
-    });
+    // 🔥 أهم تعديلين
+    assignedToId: caseData.assignedToId || "",
+    assignedToName: caseData.assignedToName || "غير محدد",
 
-    alert("تمت إعادة فتح الحالة بنجاح");
-    setSelectedArchived(null);
-    setCurrentView("dashboard");
+    triageBy: "Archive Restore",
+
+    // 🔥 هذا المهم حتى يشوفها الاستقبال + الطبيب
+    status: "Active",
+
+    processes: {
+        pharmacy: { status: "Not Requested", items: [] },
+        lab: { status: "Not Requested", items: [] },
+        nursing: { status: "Not Requested", items: [] }
+    },
+
+    timestamp: serverTimestamp()
+});
+
+alert("تمت إعادة فتح الحالة بنجاح");
+setSelectedArchived(null);
+setCurrentView("dashboard");
+
 };
+
+
 
 
     {selectedArchived && (
@@ -1592,62 +1600,27 @@ const ArchiveView = () => {
         alert("تم حذف الحالة.");
     };
 
-const handleRestoreArchived = async (caseData) => {
-    try {
-        const newCase = {
-            ...caseData,
-            status: "Triage",
-            timestamp: serverTimestamp(),
-        };
+    const handleRestore = async (caseData) => {
+        const { id, ...rest } = caseData;
 
-        // 1. إضافة الحالة لقائمة الحالات النشطة
-        const caseRef = await addDoc(
-            collection(db, `artifacts/${appId}/public/data/cases`),
-            newCase
-        );
-
-        // 2. تحديث السرير
-        const bedRef = doc(
-            db,
-            `artifacts/${appId}/public/data/beds`,
-            caseData.bedNumber.toString()
-        );
-        await updateDoc(bedRef, {
-            isOccupied: true,
-            currentCaseId: caseRef.id,
-        });
-
-        // 3. تحديث حالة الطبيب
-        if (caseData.assignedToId) {
-            const doctorRef = doc(
-                db,
-                `artifacts/${appId}/public/data/users`,
-                caseData.assignedToId
-            );
-            await updateDoc(doctorRef, {
-                status: "Busy",
-            });
-        }
-
-        // 4. حذفها من الأرشيف
+        // 1) حذف من الأرشيف
         await deleteDoc(
-            doc(
-                db,
-                `artifacts/${appId}/public/data/archived_cases`,
-                caseData.id
-            )
+            doc(db, `artifacts/${appId}/public/data/archived_cases`, id)
         );
 
-        alert("تمت إعادة تفعيل الحالة بنجاح ✔");
+        // 2) إعادة إنشائها كحالة جديدة
+        await addDoc(
+            collection(db, `artifacts/${appId}/public/data/cases`),
+            {
+                ...rest,
+                status: "Triage",
+                timestamp: serverTimestamp(),
+            }
+        );
 
-        setSelectedArchived(null);
-
-    } catch (error) {
-        console.error("Restore error:", error);
-        alert("خطأ أثناء إعادة فتح الحالة!");
-    }
-};
-
+        alert("تم إعادة إرسال الحالة للطبيب.");
+        setSelected(null);
+    };
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200">
@@ -1826,6 +1799,8 @@ if (!assignedDoctor || assignedDoctor === "") {
     setIsSubmitting(false);
     return;
 }
+
+        if (userRole === "استقبال") return;
 
         return (
             <div 
