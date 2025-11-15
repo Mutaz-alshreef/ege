@@ -1585,27 +1585,62 @@ const ArchiveView = () => {
         alert("تم حذف الحالة.");
     };
 
-    const handleRestore = async (caseData) => {
-        const { id, ...rest } = caseData;
+const handleRestoreArchived = async (caseData) => {
+    try {
+        const newCase = {
+            ...caseData,
+            status: "Triage",
+            timestamp: serverTimestamp(),
+        };
 
-        // 1) حذف من الأرشيف
-        await deleteDoc(
-            doc(db, `artifacts/${appId}/public/data/archived_cases`, id)
-        );
-
-        // 2) إعادة إنشائها كحالة جديدة
-        await addDoc(
+        // 1. إضافة الحالة لقائمة الحالات النشطة
+        const caseRef = await addDoc(
             collection(db, `artifacts/${appId}/public/data/cases`),
-            {
-                ...rest,
-                status: "Triage",
-                timestamp: serverTimestamp(),
-            }
+            newCase
         );
 
-        alert("تم إعادة إرسال الحالة للطبيب.");
-        setSelected(null);
-    };
+        // 2. تحديث السرير
+        const bedRef = doc(
+            db,
+            `artifacts/${appId}/public/data/beds`,
+            caseData.bedNumber.toString()
+        );
+        await updateDoc(bedRef, {
+            isOccupied: true,
+            currentCaseId: caseRef.id,
+        });
+
+        // 3. تحديث حالة الطبيب
+        if (caseData.assignedToId) {
+            const doctorRef = doc(
+                db,
+                `artifacts/${appId}/public/data/users`,
+                caseData.assignedToId
+            );
+            await updateDoc(doctorRef, {
+                status: "Busy",
+            });
+        }
+
+        // 4. حذفها من الأرشيف
+        await deleteDoc(
+            doc(
+                db,
+                `artifacts/${appId}/public/data/archived_cases`,
+                caseData.id
+            )
+        );
+
+        alert("تمت إعادة تفعيل الحالة بنجاح ✔");
+
+        setSelectedArchived(null);
+
+    } catch (error) {
+        console.error("Restore error:", error);
+        alert("خطأ أثناء إعادة فتح الحالة!");
+    }
+};
+
 
     return (
         <div className="bg-white p-6 rounded-xl shadow-xl border border-gray-200">
