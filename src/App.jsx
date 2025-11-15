@@ -989,6 +989,34 @@ const CaseDetail = ({ caseData, onClose, users, userId, permissions }) => {
                 <div className="flex justify-between items-start border-b pb-4 mb-4">
                     <h2 className="text-3xl font-extrabold text-red-700 flex items-center gap-3">
                         <Activity size={30} /> حالة طوارئ #{caseData.bedNumber}
+                        {/* زر استلام الحالة للطبيب */}
+{!caseData.assignedToId && permissions.canTreat && (
+    <button
+        onClick={async () => {
+            try {
+                await updateDoc(
+                    doc(db, `artifacts/${appId}/public/data/cases/${caseData.id}`),
+                    {
+                        assignedToId: userId,
+                        assignedToName:
+                            users.find(u => u.id === userId)?.name || "طبيب",
+                        status: "Active"
+                    }
+                );
+
+                alert("تم استلام الحالة بنجاح 🎉");
+                onClose();
+            } catch (err) {
+                console.error("Error assigning case:", err);
+                alert("حدث خطأ أثناء استلام الحالة!");
+            }
+        }}
+        className="w-full mt-4 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition"
+    >
+        استلام الحالة
+    </button>
+)}
+
                     </h2>
                     <button onClick={onClose} className="p-2 rounded-full text-gray-500 hover:bg-gray-200">
                         <XCircle size={24} />
@@ -1796,14 +1824,17 @@ const ArchiveView = () => {
     const CaseListItem = ({ caseItem }) => {
         const assignedDoctor = users.find(u => u.id === caseItem.assignedToId)?.name || 'غير محدد';
         const isMyCase = caseItem.assignedToId === user.uid;
-        
-        // Show only relevant cases unless Manager
-        const isRelevant =
-    permissions.canViewAll ||
-    permissions.canTriage ||
-    isMyCase ||
+        const isReception = userInfo?.role === "استقبال";
+
+const isRelevant =
+    isReception ||                      // 👈 استقبال يرى كل الحالات
+    permissions.canViewAll ||           // المدير
+    isMyCase ||                         // الطبيب المسؤول
     permissions.pharmacy ||
     permissions.nursing;
+
+if (!isRelevant) return null;
+
 
 if (!assignedDoctor || assignedDoctor === "") {
     alert("يجب تحديد طبيب مسؤول");
