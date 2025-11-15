@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Inter', sans-serif;
+  direction: rtl;
+  text-align: right;
+}
