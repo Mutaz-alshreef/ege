@@ -565,13 +565,33 @@ const TimeClock = ({ userInfo, db, userId, onStatusUpdate }) => {
     );
 };
 
-const CaseDetail = ({ caseData, onClose, users, userId, permissions }) => {
-    const [diagnosis, setDiagnosis] = useState(caseData.diagnosis || '');
-    const [notes, setNotes] = useState(caseData.notes || '');
-    const [drugs, setDrugs] = useState(caseData.processes?.pharmacy?.items || [{ name: '', dosage: '' }]);
-    const [labRequests, setLabRequests] = useState(caseData.processes?.lab?.items || ['']);
-    const [isSaving, setIsSaving] = useState(false);
-    const [patientEMR, setPatientEMR] = useState([]);
+{!caseData.assignedToId && permissions.canTreat && (
+    <button
+        onClick={async () => {
+            try {
+                // 1. تحديد المسار المباشر للمستند بدقة
+                const caseDocRef = doc(db, `artifacts/${appId}/public/data/cases`, caseData.id);
+
+                // 2. تحديث الحقول الأساسية للحالة فقط لتجنب تعارض قواعد الحماية
+                await updateDoc(caseDocRef, {
+                    assignedToId: userId,
+                    assignedToName: users.find(u => u.id === userId)?.name || "طبيب الطوارئ",
+                    status: "Active"
+                });
+
+                alert("تم استلام الحالة بنجاح وبدء المعاينة 🎉");
+                onClose();
+            } catch (err) {
+                console.error("Firebase Update Error:", err);
+                // عرض تفاصيل الخطأ القادم من فايربيس في التنبيه لمعرفة السبب الحقيقي
+                alert(`حدث خطأ أثناء استلام الحالة!\nالسبب التقني: ${err.message}`);
+            }
+        }}
+        className="mt-4 bg-green-600 text-white py-3 px-6 rounded-lg hover:bg-green-700 font-bold text-lg shadow transition w-full"
+    >
+        اضغط هنا لاستلام الحالة والبدء بالمعاينة
+    </button>
+)}
 
     useEffect(() => {
         const fetchEMR = async () => {
